@@ -1,0 +1,18 @@
+{
+  "email": "Your LinkedIn Email",
+  "password": "Your Linkedin Psw",
+  "keywords": "Your job position",
+  "location": "Job location",
+  "driver_path": "./driver/geckodriver",
+  "forbidden_words": [
+    "Senior",
+    "Lead",
+    "Manager",
+    "DevOps",
+    "Cloud",
+    "Integration",
+    "Associate",
+    "System",
+    "Principal"
+  ]
+}
