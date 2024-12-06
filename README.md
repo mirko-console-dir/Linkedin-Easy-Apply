@@ -52,9 +52,9 @@ With this tool you can easily automate the process of applying for jobs on Linke
     then run:
     conda activate selenium_py
     the directory of the new env is gonna appear like this
-    (selenium_py) nameUser@nameUser EasyApply-Linkedin
+    (selenium_py) nameUser@nameUser Linkedin-Easy-Apply
     before was
-    (base) nameUser@nameUser EasyApply-Linkedin
+    (base) nameUser@nameUser Linkedin-Easy-Apply
 
     conda install selenium
     Y
