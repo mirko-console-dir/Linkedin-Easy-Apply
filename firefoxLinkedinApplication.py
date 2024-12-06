@@ -144,30 +144,49 @@ class ApplyLinkedin:
         apply_filters_button.click()
 
     def go_throw_results(self):
-        #IN PYTHON ALL THE SPACE ARE INDICATE WITH A DOT
-        #results = self.driver.find_element_by_class_name("ember-view.jobs-search-results__list-item.occludable-update.p0.relative.scaffold-layout__list-item")
-        # Locate the <ul> element
-        ul_element = self.driver.find_element(By.CSS_SELECTOR, 'ul.scaffold-layout__list-container')
+        # Find the li element with the desired class
+        li_element = self.driver.find_element(By.CSS_SELECTOR, 'li.scaffold-layout__list-item')
+
+        # Navigate to the parent ul of this li element
+        ul_element = li_element.find_element(By.XPATH, './ancestor::ul')
         # Locate the list items (individual elements) within the <ul>
         results = ul_element.find_elements(By.TAG_NAME, 'li')
         counter = 0
-        # Iterate over the individual list items
-        for result in results:
-            hover = ActionChains(self.driver).move_to_element(result)
-            hover.perform()
-            time.sleep(1)
-               # Increment the counter
-            counter += 1
-            titles = result.find_elements(By.CLASS_NAME, 'job-card-list__title')
-            # Check if the counter is a multiple of 4, and if so, scroll
-            if counter % 2 == 0:
-                # Perform your scroll action here
-                # Scroll the element down by the specified number of pixels
-                self.driver.execute_script("return arguments[0].scrollIntoView(true);", result)
-            for title in titles:
-                # Skip titles with "Senior" in them
-                if not any(word in title.text for word in self.forbidden_words):
-                    self.submit_apply(title)
+        # Iterate over the individual list items, is dynamic because annoying LinkedIn tries to block bots
+        for index, result in enumerate(results):
+            try:
+                # Dynamically re-locate the result element before performing actions
+                result = results[index]
+
+                # Perform hover action (only once)
+                hover = ActionChains(self.driver).move_to_element(result)
+                hover.perform()
+                time.sleep(1)
+
+                # Increment the counter
+                counter += 1
+
+                # Locate titles within the current result
+                titles = result.find_elements(By.CLASS_NAME, 'job-card-list__title--link')
+
+                # Check if the counter is a multiple of 2, and if so, scroll
+                if counter % 2 == 0:
+                    self.driver.execute_script("arguments[0].scrollIntoView(true);", result)
+
+                for title in titles:
+                    try:
+                        # Find the hidden span and check for forbidden words
+                        hidden_span = title.find_element(By.CLASS_NAME, 'visually-hidden')
+                        span_text = hidden_span.text
+
+                        if not any(word in span_text for word in self.forbidden_words):
+                            self.submit_apply(title)
+                    except StaleElementReferenceException:
+                        print(f"Stale element in title processing. Skipping: {title.text}")
+                        continue  # Skip this title and move to the next one
+            except StaleElementReferenceException:
+                print(f"Stale element encountered for result {index}. Skipping...")
+                continue  # Skip this result and move to the next one
 
     def find_offers(self):
         """This function finds and processes job offers"""
@@ -190,8 +209,6 @@ class ApplyLinkedin:
         if total_results_int > 25:
         # go throw all pages and job offers and apply
             try:
-                ul_element_ext = self.driver.find_element(By.CSS_SELECTOR, 'ul.scaffold-layout__list-container')
-                results_ext = ul_element_ext.find_elements(By.TAG_NAME, 'li')
                 #  iterates through numbers starting from 25 and increasing by 25 in each iteration until it reaches total_results_int (429)
                 for page_number in range(25, total_results_int, 25):
                     self.driver.get(current_page+"&start="+str(page_number))
@@ -209,7 +226,7 @@ class ApplyLinkedin:
             discard = self.driver.find_element(By.CSS_SELECTOR, f'button[aria-label*="Dismiss"]')
             discard.send_keys(Keys.RETURN)
             time.sleep(1)
-            discard_confirm = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@data-test-dialog-secondary-btn]")))
+            discard_confirm = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@data-control-name='discard_application_confirm_btn']")))
             discard_confirm.send_keys(Keys.RETURN)
             time.sleep(1)
         except TimeoutException:
@@ -220,6 +237,10 @@ class ApplyLinkedin:
             # Handle NoSuchElementException
             print("A NoSuchElementException occurred.")
             pass
+        except StaleElementReferenceException:
+            print("A StaleElementReferenceException occurred. Retrying...")
+            # Retry locating and interacting with the elements
+            self.discard_application()
 
     def close_modal_post_apply(self):
         wait = WebDriverWait(self.driver, 10)
@@ -227,7 +248,8 @@ class ApplyLinkedin:
             wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, 'div.jobs-loader')))
             button_close_modal = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, f'button[aria-label*="Dismiss"]')))
             #button_close_modal.click()
-            self.driver.execute_script("arguments[0].click();", button_close_modal)
+            self.driver.execute_script("arguments[0].click();", button_close_modal)              
+            print("Modal dismissed successfully.")
         except NoSuchElementException:
             print('No modal post application')
             pass
@@ -235,10 +257,19 @@ class ApplyLinkedin:
     def try_to_submit_application(self):
         wait = WebDriverWait(self.driver, 3)
         try:
-            button_next = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, f'button[aria-label*="Continue to next step"]')))
-            button_next.send_keys(Keys.RETURN)
-            time.sleep(1)
-
+            # Loop to handle multiple "Next" buttons
+            while True:
+                try:
+                    # Check for the "Next" button
+                    button_next = WebDriverWait(self.driver, 5).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[aria-label*="Continue to next step"]'))
+                    )
+                    button_next.send_keys(Keys.RETURN)
+                    time.sleep(1)  # Optional, can adjust or remove based on application responsiveness
+                except TimeoutException:
+                    # Break the loop if no "Next" button is found
+                    print("No more 'Next' buttons found.")
+                    break
             # If "Submit application" button is not found, look for and click the "Review your application" button
             button_review = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, f'button[aria-label*="Review your application"]')))
             button_review.send_keys(Keys.RETURN)
